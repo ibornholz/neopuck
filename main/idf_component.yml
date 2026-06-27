@@ -1,0 +1,5 @@
+## Managed-Dependencies der App-Schicht.
+## esp_websocket_client ist seit IDF 5.x kein Builtin mehr -> aus der Registry.
+dependencies:
+  idf: ">=5.3"
+  espressif/esp_websocket_client: "^1.2"

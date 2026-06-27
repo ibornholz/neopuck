@@ -1,59 +1,45 @@
 # iPhone-Anbindung — Provisioning & Management
 
-## Sofort nutzbar (keine eigene App nötig)
+> Seit der SoftAP-Umstellung (Task 3) wird **keine App** mehr gebraucht — weder auf
+> iPhone noch Android. Provisioning läuft komplett über ein Captive Portal im Browser.
 
-1. App Store: **"ESP BLE Provisioning"** (Espressif) installieren.
-2. Device einschalten → es zeigt den Pairing-Screen (`PROV_neopuck-01`, PIN `neopuck-pop`).
-3. In der App das Gerät auswählen, PIN eingeben.
-4. WLAN wählen — **hier den Persönlichen Hotspot deines iPhones eintragen**,
-   wenn das Device übers iPhone ins Netz soll (Hotspot vorher aktivieren).
-5. Custom-Data-Feld (`agent-config`) mit dem Agent-JSON füllen:
+## Setup in 4 Schritten (App-frei)
 
-```json
-{
-  "agent_url":   "wss://agent.neonet.ai/voice",
-  "agent_token": "…",
-  "proto":       "neonet",
-  "device_name": "neopuck-01",
-  "push_to_talk": true,
-  "volume": 70,
-  "brightness": 80
-}
-```
+1. neopuck einschalten. Ist es noch nicht konfiguriert, öffnet es ein offenes WLAN
+   **`neopuck-setup`** und zeigt auf dem AMOLED einen **QR-Code** dafür.
+2. QR mit der iPhone-Kamera scannen (oder in den WLAN-Einstellungen `neopuck-setup`
+   wählen). Das iPhone tritt dem Setup-Netz bei.
+3. Das **Captive-Portal-Popup** erscheint automatisch (sonst `http://192.168.4.1`
+   im Browser öffnen). Die dunkle Config-Seite lädt.
+4. Felder ausfüllen und **Speichern**:
+   - **WLAN-Name / -Passwort** — dein Heim-WLAN (oder iPhone-Hotspot). Die Liste
+     unter dem SSID-Feld wird per `/scan` mit sichtbaren Netzen gefüllt.
+   - **Agent-URL** — z.B. `wss://agent.neonet.ai/voice`
+   - **Agent-Token** — optional (Bearer)
 
-Die Firmware nimmt WLAN-Creds über den Standardpfad, Agent-Settings über den
-Custom-Endpoint `agent-config` und meldet Live-Status über `device-status`.
+Danach stoppt neopuck den SoftAP, verbindet sich mit dem WLAN und dem Agent und
+springt in den Voice-Flow (Orb-UI).
 
-## Eigene App (späteres, separates Deliverable)
+## Re-Provisioning
 
-Eine schlanke SwiftUI-App spricht denselben Provisioning-Stack über CoreBluetooth.
-Espressif liefert dafür das **ESPProvision** Swift-Package — Grundgerüst:
+**BOOT-Taste lang drücken** (> 0,8 s) öffnet das Portal jederzeit wieder
+(`EV_SETTINGS` → `provisioning_reopen()`).
 
-```swift
-import ESPProvision
+## Sicherheit
 
-// 1) Scannen & verbinden
-ESPProvisionManager.shared.searchESPDevices(
-    devicePrefix: "PROV_", transport: .ble, security: .secure) { devices, _ in
-    guard let dev = devices?.first else { return }
-    dev.connect(delegate: self) { status in
-        // 2) WLAN setzen (Hotspot-SSID/-Pass)
-        dev.provision(ssid: ssid, passPhrase: pass) { state in /* … */ }
+- Credentials werden **nur im POST-Body** übertragen, nie in URL/Query.
+- Der QR-Code encodiert ausschließlich den Join ins **offene Setup-Netz**
+  (`WIFI:T:nopass;S:neopuck-setup;;`) — niemals das Heim-WLAN-Passwort.
 
-        // 3) Agent-Config über Custom-Endpoint pushen
-        let json = try! JSONSerialization.data(withJSONObject: [
-            "agent_url": agentURL, "agent_token": token, "proto": "neonet"
-        ])
-        dev.sendData(path: "agent-config", data: json) { _, _ in }
+## Schnittstelle (für eigene Tools)
 
-        // 4) Status lesen
-        dev.sendData(path: "device-status", data: Data()) { resp, _ in
-            // resp = {"state":..,"agent":..,"provisioned":..}
-        }
-    }
-}
-```
+Das Portal stellt bereit:
 
-Das ist genau die Schnittstelle, die `provisioning.c` (Endpoints `agent-config`,
-`device-status`) bereitstellt — App und Firmware passen also zusammen, sobald du
-die App bauen willst.
+| Route        | Methode | Zweck                                                    |
+|--------------|---------|---------------------------------------------------------|
+| `/`          | GET     | dunkle Config-Seite                                     |
+| `/scan`      | GET     | JSON der sichtbaren APs: `[{ssid,rssi,lock}, …]`        |
+| `/save`      | POST    | `wifi_ssid, wifi_pass, agent_url, agent_token` (form)   |
+
+`/save` reicht die Felder als JSON an `config_apply_json()` weiter — derselbe
+Config-Pfad wie zuvor. Wer mag, kann `/save` also auch per `curl` bedienen.

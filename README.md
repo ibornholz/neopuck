@@ -2,7 +2,7 @@
 
 Ein stylischer Voice-Puck: Knopf drücken, sprechen, der Agent antwortet per Sprache.
 Backend-Endpoint (openclaw / eigener MCP-Agent / OpenAI-Realtime) frei konfigurierbar,
-WLAN- und Agent-Konfiguration über das iPhone via BLE-Provisioning.
+WLAN- und Agent-Konfiguration app-frei über SoftAP + Captive Portal (QR auf dem Display).
 
 Das hier ist die **Applikationsschicht**. Die Board-Bring-up-Treiber (Display CO5300,
 Touch CST9217, Codec ES8311, AEC ES7210, PMU AXP2101) kommen aus dem offiziellen
@@ -23,7 +23,7 @@ nicht stimmt.
                      │           │           │           │
               ┌──────▼───┐  ┌────▼─────┐ ┌───▼──────┐ ┌──▼─────────┐
               │   ui     │  │  audio   │ │  agent   │ │ provisioning│
-              │ (LVGL)   │  │ pipeline │ │  client  │ │   (BLE)     │
+              │ (Orb)    │  │ pipeline │ │  client  │ │ (SoftAP+QR) │
               └────┬─────┘  └────┬─────┘ └────┬─────┘ └──┬──────────┘
                    │             │            │          │
               ┌────▼─────────────▼────────────▼──────────▼─────┐
@@ -57,50 +57,47 @@ Die echten Pin-/Clock-Werte stehen im Waveshare-BSP. `board.h` referenziert sie 
 
 ## 3. Bedien-Konzept (super simpel)
 
-- **Idle**: tiefschwarzer Screen, mittig ein großer pulsierender Mic-Button,
+- **Idle**: tiefschwarzer Screen, mittig der **Orb** (violett, ruhig atmend),
   unten klein dein Firmenlogo, oben dezent WLAN-/Akku-Status.
-- **Talk**: PWR-Button **oder** Tap auf den Mic-Button → `LISTENING`.
+- **Talk**: PWR-Taste **oder** Tap auf den Orb → `LISTENING` (Orb wird grün).
   Push-to-talk (halten) *oder* Toggle (tippen/tippen) — in der Config wählbar.
-- **Listening**: animierter Audio-Ring reagiert auf den Pegel; live-Transkript
-  läuft als Untertitel mit.
-- **Thinking**: ruhiger Spinner, während der Agent antwortet.
-- **Speaking**: Ring atmet im Takt der TTS, Antworttext scrollt mit.
-- **Settings**: BOOT lang drücken → QR + BLE-Pairing-Screen fürs iPhone.
+- **Listening**: der Orb pulsiert mit dem Mic-Pegel; live-Transkript oben.
+- **Thinking**: Orb amber mit Punkt, während der Agent antwortet.
+- **Speaking**: Orb cyan, atmet im Takt der TTS; Tap = „tap to dismiss" (Abbruch).
+- **Settings**: BOOT lang drücken → Captive-Portal (QR) erneut öffnen.
 
 ---
 
-## 4. iPhone-Anbindung — was real geht
+## 4. Provisioning — app-frei (SoftAP + Captive Portal)
 
-1. **Provisioning/Management über BLE**: Die Firmware nutzt den ESP-IDF
-   `wifi_provisioning`-Manager (Transport BLE) plus zwei Custom-Endpoints
-   (`agent-config`, `device-status`). Damit lassen sich vom iPhone aus setzen:
-   WLAN-SSID/-Pass, Agent-URL, Agent-Token, Protokoll, Gerätename — und der
-   Live-Status auslesen.
-2. **Internet "übers iPhone"** = **Persönlicher Hotspot**. Du gibst im
-   Provisioning den Hotspot-SSID/-Pass ein, das Device bucht sich ein. Es gibt
-   bei iOS *keine* BLE/USB-Internetbrücke für Fremdgeräte — der Hotspot ist der Weg.
-3. **App-Optionen**:
-   - Sofort nutzbar: Espressif **"ESP BLE Provisioning"** (kostenlos im App Store),
-     spricht genau diesen Provisioning-Manager. Reicht für SSID/Pass + Custom-Data.
-   - Eigene App: ein schlanker SwiftUI-Client (CoreBluetooth) ist später ein
-     separates Deliverable — Protokoll dafür steht unten in §6.
+1. **Kein App nötig** (iPhone *und* Android): Unkonfiguriert öffnet neopuck das
+   offene WLAN **`neopuck-setup`** und zeigt dafür einen **QR** auf dem AMOLED.
+   Handy verbindet → Captive-Portal-Popup → dunkle Config-Seite (`192.168.4.1`).
+2. **Eingabe**: WLAN (Liste via `/scan`), Agent-URL, Agent-Token. `POST /save`
+   reicht alles als JSON an `config_apply_json()`; danach verbindet sich das Gerät.
+3. **Internet "übers iPhone"** = **Persönlicher Hotspot**: einfach den Hotspot als
+   WLAN eintragen.
+4. **Re-Provisioning**: BOOT lang → Portal öffnet erneut. Details in `IPHONE.md`.
 
 ---
 
 ## 5. Build & Flash
 
-Voraussetzung: ESP-IDF **v5.3+**, plus das Waveshare-BSP für dieses Board als
-Component unter `components/waveshare_bsp/` (aus dem offiziellen Demo-Repo kopieren).
+Voraussetzung: ESP-IDF **v5.3+**. Der Board-Treiber-Layer liegt als Component unter
+`components/waveshare_bsp/` (CO5300 + CST9217 + ES8311/ES7210 + AXP2101 über die
+Registry-Treiber, angebunden via `esp_lvgl_port`). Registry-Treiber + LVGL v9 zieht
+der Component-Manager beim ersten Build automatisch.
 
 ```bash
 . $IDF_PATH/export.sh
-idf.py set-target esp32s3
-idf.py menuconfig      # PSRAM (octal), Flash 16MB, Partition = custom (partitions.csv)
-idf.py build
-idf.py -p /dev/ttyACM0 flash monitor
+./scripts/build.sh         # set-target + build + merge -> dist/neopuck-merged.bin
+./scripts/flash.sh         # Port auto; sonst --port /dev/cu.usbmodemXXXX
+idf.py -p <port> monitor   # Logs
 ```
 
-PSRAM **muss** an sein (LVGL-Framebuffer + Audio-Buffer liegen im PSRAM).
+`./scripts/pack.sh` macht build + flash in einem Schritt. PSRAM (octal) ist in
+`sdkconfig.defaults` an; die LVGL-Zeichenpuffer liegen aus DMA-Gründen im internen
+RAM (klein, partiell), Audio-/Instruktions-Caches im PSRAM.
 
 ---
 
