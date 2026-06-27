@@ -2,6 +2,7 @@
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>   // size_t
 
 #ifdef __cplusplus
 extern "C" {

@@ -7,15 +7,17 @@ idf_component_register(
         "audio_pipeline.c"
         "ui/ui.c"
         "ui/assets_logo.c"
-    INCLUDE_DIRS "." "ui" "board"
+        "miniapps/miniapp.c"
+        "miniapps/miniapp_stopwatch.c"
+    INCLUDE_DIRS "." "ui" "board" "miniapps"
     REQUIRES
         nvs_flash
         esp_wifi
-        wifi_provisioning
-        esp_websocket_client
+        esp_netif
+        esp_event
+        esp_http_server      # Captive-Portal (Task 3)
         json
-        esp_lcd
         esp_timer
         driver
-        waveshare_bsp        # offizielles Waveshare-BSP als Component
+        waveshare_bsp        # Board-Treiber-Layer (Task 1)
 )

@@ -1,0 +1,8 @@
+# ESP-IDF Build-Artefakte
+/build/
+/dist/
+/managed_components/
+sdkconfig
+sdkconfig.old
+dependencies.lock
+.DS_Store

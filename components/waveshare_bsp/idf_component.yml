@@ -1,0 +1,9 @@
+## Registry-Abhängigkeiten des Board-Treiber-Layers.
+## Treiber für genau dieses Board (CO5300 / CST9217) + LVGL-Port + Audio-Codec.
+dependencies:
+  idf: ">=5.3"
+  lvgl/lvgl: "^9.2.0"
+  espressif/esp_lvgl_port: "^2"
+  espressif/esp_lcd_co5300: "*"
+  waveshare/esp_lcd_touch_cst9217: "*"
+  espressif/esp_codec_dev: "^1.3"

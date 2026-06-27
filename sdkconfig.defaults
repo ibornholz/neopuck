@@ -15,14 +15,18 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_FREERTOS_HZ=1000
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 
-# --- Bluetooth (BLE provisioning) ---
-CONFIG_BT_ENABLED=y
-CONFIG_BT_BLE_ENABLED=y
-CONFIG_BT_NIMBLE_ENABLED=y
+# --- Bluetooth aus: Provisioning läuft seit Task 3 über SoftAP + Captive Portal ---
+CONFIG_BT_ENABLED=n
+
+# --- SoftAP Captive Portal: HTTP-Server braucht etwas mehr Header-Platz ---
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
 
 # --- WebSocket client TLS ---
 CONFIG_ESP_TLS_INSECURE=n
 CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
 
-# --- LVGL buffers in PSRAM handled by BSP ---
-CONFIG_LV_MEM_CUSTOM=y
+# --- LVGL (v9 managed component) ---
+# Framebuffer liegt in PSRAM (vom waveshare_bsp via esp_lvgl_port gesetzt).
+CONFIG_LV_COLOR_DEPTH_16=y
+# QR-Code-Widget für das Captive-Portal-Provisioning (Task 3).
+CONFIG_LV_USE_QRCODE=y

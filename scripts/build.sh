@@ -13,7 +13,8 @@ idf.py build
 
 mkdir -p dist
 # erzeugt ein flashbares Gesamt-Image (bootloader + part-table + app)
-idf.py merge-bin -o dist/neopuck-merged.bin
+# Absoluter Pfad: idf.py merge-bin läuft im build/-Verzeichnis.
+idf.py merge-bin -o "$PWD/dist/neopuck-merged.bin"
 
 echo
 echo "OK -> dist/neopuck-merged.bin"
