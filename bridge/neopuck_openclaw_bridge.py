@@ -81,19 +81,11 @@ async def handle_neopuck(neopuck):
         if ev.get("event") != "talk.event":
             return
         outer = ev.get("payload") or {}
-        te = outer.get("talkEvent") if isinstance(outer.get("talkEvent"), dict) else outer
-        etype = str(_find(te, "type") or _find(outer, "type") or "").lower()
-        body = te.get("payload") if isinstance(te.get("payload"), dict) else {}
-        if DEBUG and "input.audio" not in etype:
-            print("[talkEvent]", etype, json.dumps(body)[:200])
+        otype = str(outer.get("type") or "")
 
-        # Eingangs-Echos ignorieren
-        if etype.startswith("input.audio"):
-            return
-
-        # 1) Output-Audio (base64 PCM16) -> Puck
-        if "output.audio.delta" in etype or (etype.endswith("audio.delta") and "input" not in etype):
-            b64 = _find(te, "audioBase64", "audio", "delta", "pcm") or _find(body, "audioBase64", "audio", "delta", "pcm")
+        # OUTPUT-AUDIO (assistant TTS): äußerer type=="audio", Feld audioBase64
+        if otype == "audio":
+            b64 = outer.get("audioBase64") or outer.get("audio")
             if isinstance(b64, str) and b64:
                 try:
                     pcm16 = au.resample(base64.b64decode(b64), state["out_sr"], DEVICE_SR)
@@ -104,24 +96,38 @@ async def handle_neopuck(neopuck):
                 except Exception as e:
                     print("[audio out err]", e)
             return
+        if otype == "inputAudio":      # Echo des Eingangs -> ignorieren
+            return
 
-        # 2) Transkripte / Antworttext
-        txt = _find(te, "transcript", "text", "delta") or _find(body, "transcript", "text", "delta")
-        if isinstance(txt, str) and txt:
-            is_user = "input" in etype or (_find(te, "role") == "user")
-            if is_user:
-                snd({"type": "transcript", "role": "user", "text": txt, "final": "done" in etype or "final" in etype})
-            else:
+        te = outer.get("talkEvent") if isinstance(outer.get("talkEvent"), dict) else outer
+        etype = str(te.get("type") or otype or "").lower()
+        body = te.get("payload") if isinstance(te.get("payload"), dict) else {}
+        if DEBUG:
+            print("[talkEvent]", etype, json.dumps(body)[:160])
+
+        # USER-Transkript (STT des Eingangs)
+        if etype.startswith("transcript") or "input.transcript" in etype:
+            txt = _find(te, "transcript", "text", "delta") or _find(body, "transcript", "text", "delta")
+            if isinstance(txt, str) and txt:
+                snd({"type": "transcript", "role": "user", "text": txt, "final": etype.endswith("done")})
+            return
+
+        # ASSISTANT-Text
+        if "output.text" in etype or etype.endswith("text.delta") or etype.endswith("text.done"):
+            txt = _find(te, "text", "delta") or _find(body, "text", "delta")
+            if isinstance(txt, str) and txt:
                 snd({"type": "response.text", "text": txt})
+            return
 
-        # 3) Turn-Lebenszyklus
+        # Turn-Lebenszyklus
         if etype.endswith("turn.started"):
             snd({"type": "thinking"})
-        if etype.endswith("turn.ended") or etype.endswith("response.done") or etype.endswith("output.audio.done") or etype.endswith("session.closed"):
+        if (etype.endswith("turn.ended") or etype.endswith("output.audio.done")
+                or etype == "clear" or etype.endswith("session.closed")):
             if state["speaking"]:
                 state["speaking"] = False
                 snd({"type": "response.audio.end"})
-            if etype.endswith("turn.ended") or etype.endswith("response.done"):
+            if etype.endswith("turn.ended") or etype.endswith("output.audio.done"):
                 snd({"type": "response.done"})
 
         # 4) Tool-Calls vom Agent -> Mini-Apps am Device
@@ -154,6 +160,7 @@ async def handle_neopuck(neopuck):
     create = await oc.request("talk.session.create", {
         "sessionKey": "neopuck-bridge", "mode": "realtime",
         "transport": "gateway-relay", "brain": "agent-consult",
+        "voice": os.environ.get("OPENCLAW_VOICE", "alloy"),   # ohne voice -> nur Text
     })
     if DEBUG:
         print("[talk.session.create]", json.dumps(create)[:800])
@@ -179,10 +186,18 @@ async def handle_neopuck(neopuck):
                 continue
             data = json.loads(msg)
             t = data.get("type")
-            if t == "input.begin" and DEBUG:
-                print("[neopuck] input.begin")
-            elif t == "input.end" and DEBUG:
-                print("[neopuck] input.end")
+            if t == "input.begin":
+                if DEBUG: print("[neopuck] input.begin")
+            elif t == "input.end":
+                if DEBUG: print("[neopuck] input.end -> trailing silence (VAD-Trigger)")
+                # Realtime-VAD braucht etwas Stille, um das Sprech-Ende zu erkennen
+                # und die Antwort auszulösen. ~0.6s Stille @ in_sr nachschieben.
+                if state["sid"]:
+                    sil = base64.b64encode(b"\x00" * 960).decode()  # 20ms @24k
+                    for _ in range(30):
+                        await oc.request("talk.session.appendAudio", {
+                            "sessionId": state["sid"], "audioBase64": sil,
+                            "timestamp": int(time.time() * 1000)})
     except websockets.ConnectionClosed:
         pass
     finally:
