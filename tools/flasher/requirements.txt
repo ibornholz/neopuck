@@ -1,0 +1,2 @@
+# Reicht zum Flashen ohne laufende ESP-IDF.
+esptool>=4.7.0
