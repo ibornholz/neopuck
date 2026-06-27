@@ -83,4 +83,14 @@ void audio_play_pcm(const int16_t *pcm, size_t samples)
         xRingbufferSend(s_play_rb, pcm, samples * sizeof(int16_t), pdMS_TO_TICKS(50));
 }
 
+void audio_play_flush(void)
+{
+    if (!s_play_rb) return;
+    size_t n = 0;
+    void *item;
+    // alle ausstehenden TTS-Chunks verwerfen (Interrupt im SPEAKING-State)
+    while ((item = xRingbufferReceive(s_play_rb, &n, 0)) != NULL)
+        vRingbufferReturnItem(s_play_rb, item);
+}
+
 uint8_t audio_input_level(void) { return s_level; }

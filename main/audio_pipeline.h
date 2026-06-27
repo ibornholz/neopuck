@@ -17,6 +17,9 @@ void audio_capture_stop(void);
 // TTS-Audio vom Agent in die Playback-Queue (aus agent on_audio Callback).
 void audio_play_pcm(const int16_t *pcm, size_t samples);
 
+// Playback-Queue sofort leeren (Interrupt: "tap to dismiss" im SPEAKING-State).
+void audio_play_flush(void);
+
 // liefert aktuellen Mic-Pegel 0..100 für die UI-Animation.
 uint8_t audio_input_level(void);
 
