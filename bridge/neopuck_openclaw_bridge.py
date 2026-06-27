@@ -67,64 +67,77 @@ async def handle_neopuck(neopuck):
     print("[neopuck] verbunden")
 
     loop = asyncio.get_event_loop()
-    state = {"sid": None, "in_sr": 16000, "out_sr": 24000, "speaking": False}
+    state = {"sid": None, "in_sr": 24000, "out_sr": 24000, "speaking": False}
+
+    def snd(obj):
+        loop.create_task(neopuck.send(obj if isinstance(obj, (bytes, bytearray)) else json.dumps(obj)))
 
     # --- openclaw talk.event -> neopuck ---
+    # Reale Struktur (live verifiziert): {event:"talk.event", payload:{relaySessionId,
+    # type, talkEvent:{type, payload, ...}}}. Die echten Typen stehen in talkEvent.type:
+    #   turn.started / input.audio.delta(=Echo, ignorieren) / output.audio.delta(+done)
+    #   / *.transcript* / turn.ended / session.closed
     def on_event(ev):
         if ev.get("event") != "talk.event":
             return
-        payload = ev.get("payload") or {}
-        if DEBUG:
-            print("[talk.event]", json.dumps(payload)[:400])
-        etype = str(_find(payload, "type", "talkEvent", "event") or "")
+        outer = ev.get("payload") or {}
+        te = outer.get("talkEvent") if isinstance(outer.get("talkEvent"), dict) else outer
+        etype = str(_find(te, "type") or _find(outer, "type") or "").lower()
+        body = te.get("payload") if isinstance(te.get("payload"), dict) else {}
+        if DEBUG and "input.audio" not in etype:
+            print("[talkEvent]", etype, json.dumps(body)[:200])
+
+        # Eingangs-Echos ignorieren
+        if etype.startswith("input.audio"):
+            return
 
         # 1) Output-Audio (base64 PCM16) -> Puck
-        b64 = _find(payload, "audioBase64", "audio", "delta", "pcm")
-        if isinstance(b64, str) and b64 and "audio" in etype.lower() + "delta":
-            try:
-                pcm = base64.b64decode(b64)
-                pcm16 = au.resample(pcm, state["out_sr"], DEVICE_SR)
-                if not state["speaking"]:
-                    state["speaking"] = True
-                    loop.create_task(neopuck.send(json.dumps({"type": "response.audio.begin"})))
-                loop.create_task(neopuck.send(pcm16))
-            except Exception as e:
-                print("[audio out err]", e)
+        if "output.audio.delta" in etype or (etype.endswith("audio.delta") and "input" not in etype):
+            b64 = _find(te, "audioBase64", "audio", "delta", "pcm") or _find(body, "audioBase64", "audio", "delta", "pcm")
+            if isinstance(b64, str) and b64:
+                try:
+                    pcm16 = au.resample(base64.b64decode(b64), state["out_sr"], DEVICE_SR)
+                    if not state["speaking"]:
+                        state["speaking"] = True
+                        snd({"type": "response.audio.begin"})
+                    snd(pcm16)
+                except Exception as e:
+                    print("[audio out err]", e)
             return
 
         # 2) Transkripte / Antworttext
-        txt = _find(payload, "transcript", "text")
-        role = _find(payload, "role") or "assistant"
+        txt = _find(te, "transcript", "text", "delta") or _find(body, "transcript", "text", "delta")
         if isinstance(txt, str) and txt:
-            t = "transcript" if role == "user" else "response.text"
-            msg = {"type": t, "text": txt}
-            if t == "transcript":
-                msg.update({"role": "user", "final": bool(_find(payload, "final"))})
-            loop.create_task(neopuck.send(json.dumps(msg)))
+            is_user = "input" in etype or (_find(te, "role") == "user")
+            if is_user:
+                snd({"type": "transcript", "role": "user", "text": txt, "final": "done" in etype or "final" in etype})
+            else:
+                snd({"type": "response.text", "text": txt})
 
         # 3) Turn-Lebenszyklus
-        if "thinking" in etype or etype.endswith("turn.started"):
-            loop.create_task(neopuck.send(json.dumps({"type": "thinking"})))
-        if etype.endswith("turn.ended") or "done" in etype or etype.endswith("close"):
+        if etype.endswith("turn.started"):
+            snd({"type": "thinking"})
+        if etype.endswith("turn.ended") or etype.endswith("response.done") or etype.endswith("output.audio.done") or etype.endswith("session.closed"):
             if state["speaking"]:
                 state["speaking"] = False
-                loop.create_task(neopuck.send(json.dumps({"type": "response.audio.end"})))
-            loop.create_task(neopuck.send(json.dumps({"type": "response.done"})))
+                snd({"type": "response.audio.end"})
+            if etype.endswith("turn.ended") or etype.endswith("response.done"):
+                snd({"type": "response.done"})
 
         # 4) Tool-Calls vom Agent -> Mini-Apps am Device
         if "tool" in etype:
-            name = _find(payload, "name", "tool", "toolName")
-            args = _find(payload, "arguments", "args", "params") or {}
+            name = _find(te, "name", "tool", "toolName") or _find(body, "name", "tool", "toolName")
+            args = _find(te, "arguments", "args", "params") or _find(body, "arguments", "args", "params") or {}
             if isinstance(args, str):
                 try: args = json.loads(args)
                 except json.JSONDecodeError: args = {}
             if name == "show_qr":
-                loop.create_task(neopuck.send(json.dumps({"type": "app.launch", "app": "qr",
-                    "params": {"data": args.get("data", ""), "caption": args.get("caption", "")}})))
+                snd({"type": "app.launch", "app": "qr",
+                     "params": {"data": args.get("data", ""), "caption": args.get("caption", "")}})
             elif name in ("start_stopwatch", "stopwatch"):
-                loop.create_task(neopuck.send(json.dumps({"type": "app.launch", "app": "stopwatch", "params": {}})))
+                snd({"type": "app.launch", "app": "stopwatch", "params": {}})
             elif name in ("close_app", "exit"):
-                loop.create_task(neopuck.send(json.dumps({"type": "app.exit"})))
+                snd({"type": "app.exit"})
 
     oc = OpenclawClient(OPENCLAW_WS, OPENCLAW_USER, OPENCLAW_PASS,
                         gateway_token=OPENCLAW_TOKEN, on_event=on_event)
@@ -136,18 +149,18 @@ async def handle_neopuck(neopuck):
         oc_task.cancel(); await neopuck.close(); return
     print("[openclaw] verbunden")
 
-    # talk-Session anlegen (server-seitige Stimme: stt-tts / gateway-relay / agent-consult)
+    # talk-Session anlegen — live verifiziert: realtime + gateway-relay + agent-consult
+    # (openclaw = Gehirn via agent-consult, Stimme via openclaws openai-Realtime; PCM16).
     create = await oc.request("talk.session.create", {
-        "sessionKey": "neopuck-bridge", "mode": "stt-tts",
+        "sessionKey": "neopuck-bridge", "mode": "realtime",
         "transport": "gateway-relay", "brain": "agent-consult",
-        "provider": TALK_PROVIDER,
     })
     if DEBUG:
         print("[talk.session.create]", json.dumps(create)[:800])
     sess = create.get("session", create)
     state["sid"] = _find(create, "relaySessionId", "sessionId", "id") or _find(sess, "relaySessionId", "id")
-    audio = _find(sess, "audio") or {}
-    state["in_sr"]  = int(_find(audio, "inputSampleRateHz") or 16000)
+    audio = _find(create, "audio") or _find(sess, "audio") or {}
+    state["in_sr"]  = int(_find(audio, "inputSampleRateHz") or 24000)
     state["out_sr"] = int(_find(audio, "outputSampleRateHz") or 24000)
     print(f"[openclaw] talk session {state['sid']} (in {state['in_sr']}Hz / out {state['out_sr']}Hz)")
 
