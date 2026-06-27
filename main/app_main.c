@@ -73,6 +73,8 @@ static void app_loop(void)
         if (b & EV_PROV_DONE)  provisioning_start();            // neu verbinden
         if (b & EV_SETTINGS) {
             if (miniapp_active()) miniapp_stop();
+            agent_client_disconnect();   // Agent-Retries stoppen, sonst überschreibt
+                                         // EV_AGENT_DOWN gleich wieder das Portal mit ST_ERROR
             provisioning_reopen();
             continue;
         }
@@ -88,6 +90,10 @@ static void app_loop(void)
         }
         // Während eine Mini-App läuft, sind die Voice-States pausiert.
         if (s_state == ST_MINIAPP) continue;
+
+        // Im Provisioning-/Portal-Modus dürfen WLAN-/Agent-Events den QR-Screen
+        // NICHT überschreiben (sonst springt das Portal sofort auf ST_ERROR).
+        if (s_state == ST_PROVISION) continue;
 
         if (b & EV_WIFI_UP)   agent_client_connect();
         if (b & EV_WIFI_DOWN) app_set_state(ST_CONNECTING);
