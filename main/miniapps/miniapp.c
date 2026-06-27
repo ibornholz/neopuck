@@ -15,8 +15,10 @@ static const char *TAG = "miniapp";
 
 // Registrierte Apps (per id gesucht). Beispiel-App siehe miniapp_stopwatch.c.
 extern const miniapp_t miniapp_stopwatch;
+extern const miniapp_t miniapp_qr;
 static const miniapp_t *const s_registry[] = {
     &miniapp_stopwatch,
+    &miniapp_qr,
 };
 
 static const miniapp_t *s_cur;

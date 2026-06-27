@@ -22,7 +22,8 @@ static void           *s_arg;
 
 static void emit(bsp_button_t btn, bsp_button_evt_t evt)
 {
-    ESP_LOGD(TAG, "btn=%d evt=%d", btn, evt);
+    static const char *N[] = { "DOWN", "UP", "LONG" };
+    ESP_LOGI(TAG, "%s %s", btn == BSP_BTN_PWR ? "PWR" : "BOOT", N[evt]);
     if (s_cb) s_cb(btn, evt, s_arg);
 }
 

@@ -65,9 +65,9 @@ static void set_orb_color(uint32_t glow, uint32_t core_col)
     lv_obj_set_style_text_color(status_lbl, hex(glow), 0);
 }
 
-// Tap auf den Orb: im SPEAKING-Zustand = "tap to dismiss" (Wiedergabe abbrechen),
-// sonst wie PWR/Talk-Taste.
-static void orb_clicked(lv_event_t *e)
+// Orb-Touch = Push-to-Talk: HALTEN nimmt auf, LOSLASSEN sendet (-> THINKING).
+// Im SPEAKING-Zustand ist das erste Berühren "tap to dismiss" (Abbruch).
+static void orb_pressed(lv_event_t *e)
 {
     (void)e;
     extern EventGroupHandle_t g_events;
@@ -75,8 +75,14 @@ static void orb_clicked(lv_event_t *e)
         audio_play_flush();
         app_set_state(ST_IDLE);
     } else {
-        xEventGroupSetBits(g_events, EV_TALK_PRESS);
+        xEventGroupSetBits(g_events, EV_TALK_PRESS);   // Aufnahme start
     }
+}
+static void orb_released(lv_event_t *e)
+{
+    (void)e;
+    extern EventGroupHandle_t g_events;
+    xEventGroupSetBits(g_events, EV_TALK_RELEASE);     // Aufnahme Ende -> THINKING
 }
 
 // einen runden, randlosen Vollkreis erzeugen
@@ -157,9 +163,11 @@ void ui_init(void)
     lv_obj_set_style_shadow_width(core, 48, 0);
     lv_obj_set_style_shadow_spread(core, 4, 0);
     lv_obj_set_style_shadow_opa(core, LV_OPA_70, 0);
-    // Orb ist tippbar (Talk / tap-to-dismiss)
+    // Orb ist gedrückt-haltbar (Push-to-Talk) bzw. tap-to-dismiss im SPEAKING.
     lv_obj_add_flag(core, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(core, orb_clicked, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(core, orb_pressed,  LV_EVENT_PRESSED,    NULL);
+    lv_obj_add_event_cb(core, orb_released, LV_EVENT_RELEASED,   NULL);
+    lv_obj_add_event_cb(core, orb_released, LV_EVENT_PRESS_LOST, NULL);
 
     // kleiner Punkt für THINKING (in den Kern gesetzt)
     think_dot = circle(orb_layer, 18, UI_TEXT, LV_OPA_COVER);

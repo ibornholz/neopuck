@@ -9,6 +9,7 @@ idf_component_register(
         "ui/assets_logo.c"
         "miniapps/miniapp.c"
         "miniapps/miniapp_stopwatch.c"
+        "miniapps/miniapp_qr.c"
     INCLUDE_DIRS "." "ui" "board" "miniapps"
     REQUIRES
         nvs_flash
