@@ -69,6 +69,7 @@ class OpenclawClient:
         self._pending = {}          # req-id -> Future
         self._on_event = on_event   # callback(event_dict)
         self.connected = asyncio.Event()
+        self._connect_started = False
 
     def _connect_params(self, nonce: str) -> dict:
         signed_at = int(time.time() * 1000)
@@ -111,16 +112,23 @@ class OpenclawClient:
             self.ws = await websockets.connect(self.url, additional_headers=headers, max_size=None)
         except TypeError:
             self.ws = await websockets.connect(self.url, extra_headers=headers, max_size=None)
+
+        # Fallback: kommt keine connect.challenge, Connect trotzdem senden (Nonce="").
+        asyncio.create_task(self._fallback_connect())
+
         async for raw in self.ws:
+            if os.environ.get("OCLAW_DEBUG"):
+                print("[raw]", str(raw)[:700])
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
                 continue
             t = msg.get("type")
             if t == "event" and msg.get("event") == "connect.challenge":
-                nonce = msg["payload"]["nonce"]
-                # connect-Request mit signiertem Device
-                asyncio.create_task(self._do_connect(nonce))
+                if not self._connect_started:
+                    self._connect_started = True
+                    nonce = msg["payload"]["nonce"]
+                    asyncio.create_task(self._do_connect(nonce))
             elif t in ("res", "response"):
                 fut = self._pending.pop(msg.get("id"), None)
                 if fut and not fut.done():
@@ -133,6 +141,12 @@ class OpenclawClient:
                     self.connected.set()
                 if self._on_event:
                     self._on_event(msg)
+
+    async def _fallback_connect(self):
+        await asyncio.sleep(1.5)
+        if not self._connect_started and self.ws is not None:
+            self._connect_started = True
+            await self._do_connect("")   # ohne Challenge -> Nonce ""
 
     async def _do_connect(self, nonce: str):
         rid = str(uuid.uuid4())
