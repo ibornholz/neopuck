@@ -8,7 +8,7 @@ Type=simple
 # Pfade anpassen:
 WorkingDirectory=/opt/neopuck-bridge
 EnvironmentFile=/opt/neopuck-bridge/.env
-ExecStart=/opt/neopuck-bridge/.venv/bin/python /opt/neopuck-bridge/neopuck_openai_bridge.py
+ExecStart=/opt/neopuck-bridge/.venv/bin/python /opt/neopuck-bridge/neopuck_openclaw_bridge.py
 Restart=always
 RestartSec=3
 # Nur das eigene Verzeichnis beschreibbar (Identitätsdatei wird hier abgelegt)

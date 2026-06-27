@@ -17,19 +17,20 @@ neopuck ──ws, PCM16 16k──►  Bridge  ──►  STT ─► openclaw (Ge
   und wird **einmal freigegeben**. Kein Umbau am App-Token, kein neuer Token in
   openclaw nötig.
 
-## Sprach-Weg (wird final verdrahtet)
-openclaw bietet `chat.send` (+ `sessions.messages.subscribe`) für Text und eine
-**`talk.*`-API** (`talk.session.create/appendAudio/...`) für Audio. Sobald das Gerät
-gepairt ist, wird live geprüft, ob `talk.*` direkt Audio liefert (dann **kein
-eigenes OpenAI nötig**) oder ob STT/TTS über OpenAI laufen — und entsprechend
-verdrahtet.
+## Sprach-Weg: openclaw macht alles (kein OpenAI nötig)
+openclaw liefert über `talk.session.create` (mode `stt-tts`, transport
+`gateway-relay`, brain `agent-consult`, provider `microsoft`) den kompletten
+Voice-Loop **server-seitig**: Audio rein via `talk.session.appendAudio`, Audio +
+Transkripte raus via `talk.event`. Die Standard-Bridge `neopuck_openclaw_bridge.py`
+relayed nur PCM16 — **kein eigener OpenAI-Key**.
+(Alternative: `neopuck_openai_bridge.py` nutzt OpenAI Realtime; braucht einen Key.)
 
 ## Schnellstart (lokal)
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env          # openclaw-Token etc. eintragen
-python3 neopuck_openai_bridge.py
+OCLAW_DEBUG=1 python3 neopuck_openclaw_bridge.py   # DEBUG zeigt talk.event-Felder
 ```
 Beim ersten Start loggt die Bridge ihre `deviceId` → in openclaw als **operator**
 freigeben. Server-Deployment + Update-Strategie: siehe **DEPLOY.md**.
@@ -43,7 +44,8 @@ Agent-URL die Bridge eintragen: `ws://<bridge-ip>:8765` (lokal) bzw.
 | Datei | Zweck |
 |-------|-------|
 | `openclaw_client.py` | openclaw-Gateway-Client (Ed25519-Pairing-Handshake) |
-| `neopuck_openai_bridge.py` | WS-Server fürs Device + Sprach-Pipeline |
+| `neopuck_openclaw_bridge.py` | **Standard**: PCM-Relay Device ⇄ openclaw talk.* |
+| `neopuck_openai_bridge.py` | Alternative: Device ⇄ OpenAI Realtime |
 | `audio_util.py` | PCM16-Resampler 16k↔24k (stdlib) |
 | `Dockerfile` / `docker-compose.yml` / `*.service` | Deployment |
 | `DEPLOY.md` | Server-Setup, TLS, Updates |

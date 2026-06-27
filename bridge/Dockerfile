@@ -9,4 +9,5 @@ COPY *.py ./
 # Persistente Dinge (Geräteidentität, .env) werden als Volume gemountet,
 # damit Updates die Pairing-Identität nicht verlieren (siehe DEPLOY.md).
 EXPOSE 8765
-CMD ["python", "neopuck_openai_bridge.py"]
+# Variante 2 (openclaw = Gehirn+Stimme). Alternative: neopuck_openai_bridge.py
+CMD ["python", "neopuck_openclaw_bridge.py"]
