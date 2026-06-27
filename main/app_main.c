@@ -7,6 +7,7 @@
 #include "audio_pipeline.h"
 #include "board.h"
 #include "ui/ui.h"
+#include "miniapps/miniapp.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -63,14 +64,30 @@ static void app_loop(void)
         EV_TALK_PRESS | EV_TALK_RELEASE | EV_SETTINGS |
         EV_WIFI_UP | EV_WIFI_DOWN | EV_AGENT_UP | EV_AGENT_DOWN |
         EV_AGENT_THINK | EV_AGENT_SPEAK | EV_AGENT_DONE | EV_AGENT_ERROR |
-        EV_PROV_DONE;
+        EV_PROV_DONE | EV_APP_LAUNCH | EV_APP_EXIT;
 
     for (;;) {
         EventBits_t b = xEventGroupWaitBits(g_events, ANY, pdTRUE, pdFALSE,
                                             portMAX_DELAY);
 
         if (b & EV_PROV_DONE)  provisioning_start();            // neu verbinden
-        if (b & EV_SETTINGS) { provisioning_reopen(); continue; }
+        if (b & EV_SETTINGS) {
+            if (miniapp_active()) miniapp_stop();
+            provisioning_reopen();
+            continue;
+        }
+
+        // --- Mini-App-Runtime (Task 4) ---
+        if (b & EV_APP_LAUNCH) {
+            agent_launch_t l;
+            if (agent_pop_launch(&l)) miniapp_start(l.id, l.params);  // -> ST_MINIAPP
+        }
+        if (b & EV_APP_EXIT) {
+            if (miniapp_active()) miniapp_stop();
+            app_set_state(ST_IDLE);
+        }
+        // Während eine Mini-App läuft, sind die Voice-States pausiert.
+        if (s_state == ST_MINIAPP) continue;
 
         if (b & EV_WIFI_UP)   agent_client_connect();
         if (b & EV_WIFI_DOWN) app_set_state(ST_CONNECTING);

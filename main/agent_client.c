@@ -7,6 +7,7 @@
 #include "config_store.h"
 
 #include <string.h>
+#include <stdlib.h>
 #include "esp_log.h"
 #include "esp_websocket_client.h"
 #include "cJSON.h"
@@ -16,6 +17,18 @@ static const char *TAG = "agent";
 static esp_websocket_client_handle_t s_ws;
 static agent_callbacks_t s_cb;
 static volatile bool s_connected;
+
+// ausstehende app.launch-Anforderung (single-slot)
+static agent_launch_t s_launch;
+static volatile bool  s_launch_pending;
+
+bool agent_pop_launch(agent_launch_t *out)
+{
+    if (!s_launch_pending) return false;
+    *out = s_launch;
+    s_launch_pending = false;
+    return true;
+}
 
 // ---- ausgehende JSON-Steuernachricht -----------------------------------------
 static void ws_send_json(const char *json)
@@ -67,6 +80,23 @@ static void handle_json(const char *data, int len)
         const cJSON *m = cJSON_GetObjectItemCaseSensitive(root, "message");
         ESP_LOGW(TAG, "agent error: %s", cJSON_IsString(m) ? m->valuestring : "?");
         if (s_cb.on_state_event) s_cb.on_state_event(EV_AGENT_ERROR);
+    } else if (strcmp(type, "app.launch") == 0) {
+        const cJSON *app = cJSON_GetObjectItemCaseSensitive(root, "app");
+        const cJSON *params = cJSON_GetObjectItemCaseSensitive(root, "params");
+        if (cJSON_IsString(app)) {
+            memset(&s_launch, 0, sizeof s_launch);
+            strncpy(s_launch.id, app->valuestring, sizeof s_launch.id - 1);
+            if (params) {
+                char *ps = cJSON_PrintUnformatted(params);
+                if (ps) { strncpy(s_launch.params, ps, sizeof s_launch.params - 1); free(ps); }
+            } else {
+                strcpy(s_launch.params, "{}");
+            }
+            s_launch_pending = true;
+            if (s_cb.on_state_event) s_cb.on_state_event(EV_APP_LAUNCH);
+        }
+    } else if (strcmp(type, "app.exit") == 0) {
+        if (s_cb.on_state_event) s_cb.on_state_event(EV_APP_EXIT);
     }
     cJSON_Delete(root);
 }

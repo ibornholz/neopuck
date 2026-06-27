@@ -16,6 +16,7 @@ typedef enum {
     ST_THINKING,    // input.end gesendet, Antwort kommt
     ST_SPEAKING,    // TTS-Audio läuft
     ST_ERROR,
+    ST_MINIAPP,     // Mini-App läuft (Voice-States pausiert)  [Task 4]
 } app_state_t;
 
 // Event-Bits (xEventGroup) — entkoppeln ISR/Callbacks von der State-Machine.
@@ -31,6 +32,8 @@ typedef enum {
 #define EV_AGENT_DONE    (1 << 9)   // response.done
 #define EV_AGENT_ERROR   (1 << 10)
 #define EV_PROV_DONE     (1 << 11)  // Provisioning abgeschlossen
+#define EV_APP_LAUNCH    (1 << 12)  // Agent: app.launch  [Task 4]
+#define EV_APP_EXIT      (1 << 13)  // Agent: app.exit    [Task 4]
 
 extern EventGroupHandle_t g_events;
 
