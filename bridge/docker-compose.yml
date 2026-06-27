@@ -1,0 +1,11 @@
+services:
+  neopuck-bridge:
+    build: .
+    image: neopuck-bridge:latest
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8765:8765"
+    volumes:
+      # Geräteidentität persistent halten -> nach Updates KEINE neue Pairing-Freigabe nötig
+      - ./.openclaw_identity.json:/app/.openclaw_identity.json

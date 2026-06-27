@@ -1,0 +1,18 @@
+[Unit]
+Description=neopuck <-> openclaw/OpenAI Voice-Bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Pfade anpassen:
+WorkingDirectory=/opt/neopuck-bridge
+EnvironmentFile=/opt/neopuck-bridge/.env
+ExecStart=/opt/neopuck-bridge/.venv/bin/python /opt/neopuck-bridge/neopuck_openai_bridge.py
+Restart=always
+RestartSec=3
+# Nur das eigene Verzeichnis beschreibbar (Identitätsdatei wird hier abgelegt)
+ReadWritePaths=/opt/neopuck-bridge
+
+[Install]
+WantedBy=multi-user.target
