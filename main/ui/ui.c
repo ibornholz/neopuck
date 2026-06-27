@@ -309,6 +309,11 @@ void ui_show_state(app_state_t st)
         lv_obj_clear_flag(miniapp_layer, LV_OBJ_FLAG_HIDDEN);
         break;
 
+    case ST_SLEEP:                 // alles aus (zusätzlich Backlight 0 in app_main)
+        show_orb(false);
+        lv_label_set_text(transcript, "");
+        break;
+
     default:
         lv_label_set_text(status_lbl, "");
         break;

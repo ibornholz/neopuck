@@ -29,11 +29,15 @@ void app_set_state(app_state_t st)
 // --- Buttons (BSP) -> Events --------------------------------------------------
 static void on_button(bsp_button_t btn, bsp_button_evt_t evt, void *arg)
 {
+    static bool boot_long;
     if (btn == BSP_BTN_PWR) {
         if (evt == BSP_BTN_DOWN) xEventGroupSetBits(g_events, EV_TALK_PRESS);
         if (evt == BSP_BTN_UP)   xEventGroupSetBits(g_events, EV_TALK_RELEASE);
-    } else if (btn == BSP_BTN_BOOT && evt == BSP_BTN_LONG) {
-        xEventGroupSetBits(g_events, EV_SETTINGS);
+        if (evt == BSP_BTN_LONG) xEventGroupSetBits(g_events, EV_SLEEP);   // PWR lang -> Schlafen/Wecken
+    } else if (btn == BSP_BTN_BOOT) {
+        if (evt == BSP_BTN_DOWN) boot_long = false;
+        else if (evt == BSP_BTN_LONG) { boot_long = true; xEventGroupSetBits(g_events, EV_SETTINGS); }
+        else if (evt == BSP_BTN_UP && !boot_long) xEventGroupSetBits(g_events, EV_HOME); // BOOT kurz -> Bereit
     }
 }
 
@@ -64,7 +68,7 @@ static void app_loop(void)
         EV_TALK_PRESS | EV_TALK_RELEASE | EV_SETTINGS |
         EV_WIFI_UP | EV_WIFI_DOWN | EV_AGENT_UP | EV_AGENT_DOWN |
         EV_AGENT_THINK | EV_AGENT_SPEAK | EV_AGENT_DONE | EV_AGENT_ERROR |
-        EV_PROV_DONE | EV_APP_LAUNCH | EV_APP_EXIT;
+        EV_PROV_DONE | EV_APP_LAUNCH | EV_APP_EXIT | EV_HOME | EV_SLEEP;
 
     for (;;) {
         EventBits_t b = xEventGroupWaitBits(g_events, ANY, pdTRUE, pdFALSE,
@@ -94,6 +98,36 @@ static void app_loop(void)
         // Im Provisioning-/Portal-Modus dürfen WLAN-/Agent-Events den QR-Screen
         // NICHT überschreiben (sonst springt das Portal sofort auf ST_ERROR).
         if (s_state == ST_PROVISION) continue;
+
+        // --- Schlafen / Aufwecken (PWR lang) ---
+        if (b & EV_SLEEP) {
+            if (s_state == ST_SLEEP) {                 // aufwecken
+                bsp_display_brightness_set(c->brightness);
+                app_set_state(agent_client_is_connected() ? ST_IDLE : ST_CONNECTING);
+            } else {                                   // schlafen legen
+                audio_capture_stop();
+                audio_play_flush();
+                bsp_display_brightness_set(0);
+                app_set_state(ST_SLEEP);
+            }
+            continue;
+        }
+        if (s_state == ST_SLEEP) {
+            if (b & (EV_TALK_PRESS | EV_TALK_RELEASE | EV_HOME)) {  // jeder Druck weckt
+                bsp_display_brightness_set(c->brightness);
+                app_set_state(agent_client_is_connected() ? ST_IDLE : ST_CONNECTING);
+            }
+            continue;
+        }
+
+        // --- BOOT kurz: zurück auf "Bereit" (enthängt z.B. THINKING) ---
+        if (b & EV_HOME) {
+            audio_capture_stop();
+            audio_play_flush();
+            if (miniapp_active()) miniapp_stop();
+            app_set_state(agent_client_is_connected() ? ST_IDLE : ST_CONNECTING);
+            continue;
+        }
 
         if (b & EV_WIFI_UP)   agent_client_connect();
         if (b & EV_WIFI_DOWN) app_set_state(ST_CONNECTING);

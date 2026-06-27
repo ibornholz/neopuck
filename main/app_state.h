@@ -17,6 +17,7 @@ typedef enum {
     ST_SPEAKING,    // TTS-Audio läuft
     ST_ERROR,
     ST_MINIAPP,     // Mini-App läuft (Voice-States pausiert)  [Task 4]
+    ST_SLEEP,       // Display aus, Voice pausiert — Aufwecken per Taste
 } app_state_t;
 
 // Event-Bits (xEventGroup) — entkoppeln ISR/Callbacks von der State-Machine.
@@ -34,6 +35,8 @@ typedef enum {
 #define EV_PROV_DONE     (1 << 11)  // Provisioning abgeschlossen
 #define EV_APP_LAUNCH    (1 << 12)  // Agent: app.launch  [Task 4]
 #define EV_APP_EXIT      (1 << 13)  // Agent: app.exit    [Task 4]
+#define EV_HOME          (1 << 14)  // BOOT kurz -> zurück auf "Bereit" (enthängt)
+#define EV_SLEEP         (1 << 15)  // PWR lang -> Schlafen/Aufwecken (Toggle)
 
 extern EventGroupHandle_t g_events;
 
