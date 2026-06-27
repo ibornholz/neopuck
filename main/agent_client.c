@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include "esp_log.h"
 #include "esp_websocket_client.h"
+#include "esp_crt_bundle.h"   // CA-Bundle für wss://-Zertifikatsprüfung
 #include "cJSON.h"
 
 static const char *TAG = "agent";
@@ -144,6 +145,8 @@ void agent_client_connect(void)
         .buffer_size = 4096,
         .reconnect_timeout_ms = 3000,
         .network_timeout_ms = 8000,
+        // wss:// gegen die eingebaute CA-Liste prüfen (für ws:// ignoriert).
+        .crt_bundle_attach = esp_crt_bundle_attach,
     };
     // Token als Authorization-Header (sauberer als Query-Param).
     char hdr[160];

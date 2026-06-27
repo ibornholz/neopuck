@@ -24,6 +24,9 @@ CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
 # --- WebSocket client TLS ---
 CONFIG_ESP_TLS_INSECURE=n
 CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+# CA-Bundle für wss://-Zertifikatsprüfung (esp_crt_bundle_attach)
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
 
 # --- LVGL (v9 managed component) ---
 # Framebuffer liegt in PSRAM (vom waveshare_bsp via esp_lvgl_port gesetzt).

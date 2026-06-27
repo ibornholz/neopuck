@@ -347,6 +347,11 @@ void provisioning_start(void)
 void provisioning_reopen(void)
 {
     // Re-Provisioning vom Settings-Screen (BOOT lang).
+    // WICHTIG: s_portal_running ZUERST setzen, sonst triggert der
+    // STA_DISCONNECTED-Handler sofort esp_wifi_connect() und das Gerät springt
+    // zurück auf "verbinde", statt im Portal zu bleiben.
+    if (s_portal_running) return;
+    s_portal_running = true;
     esp_wifi_disconnect();
-    if (!s_portal_running) start_portal();
+    start_portal();
 }
