@@ -12,3 +12,4 @@ sdkconfig*
 bridge/.env
 bridge/.venv/
 bridge/__pycache__/
+bridge/.openclaw_identity.json
