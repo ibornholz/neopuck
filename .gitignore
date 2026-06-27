@@ -7,3 +7,8 @@ sdkconfig.old
 dependencies.lock
 .DS_Store
 sdkconfig*
+
+# Bridge
+bridge/.env
+bridge/.venv/
+bridge/__pycache__/
