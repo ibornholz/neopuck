@@ -126,7 +126,7 @@ void ui_init(void)
     lv_label_set_text(batt_lbl, "—%");
 
     // --- Transkript/Antwort (oben) ---
-    transcript = lv_label_create(scr);
+    transcript = lv_label_create(scr);   // Umlaute
     lv_label_set_long_mode(transcript, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(transcript, 360);
     lv_obj_set_style_text_align(transcript, LV_TEXT_ALIGN_CENTER, 0);

@@ -6,6 +6,9 @@ CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
 CONFIG_SPIRAM_RODATA=y
+# WiFi/LWIP-Puffer ins PSRAM -> internen RAM für den TLS-Handshake (wss) freihalten
+# (sonst: "Dynamic Impl: alloc failed" / SSL_ALLOC_FAILED beim wss-Connect)
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
 
 # --- Partition table ---
 CONFIG_PARTITION_TABLE_CUSTOM=y
@@ -23,7 +26,11 @@ CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
 
 # --- WebSocket client TLS ---
 CONFIG_ESP_TLS_INSECURE=n
-CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+# mbedtls aus dem PSRAM allozieren -> kein "alloc failed" im wss-Handshake
+# (interner RAM ist durch LVGL-DMA-Puffer + WiFi knapp).
+# Dynamic-Buffer MUSS dafür aus sein, sonst erzwingt es interne Allokation.
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=n
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
 # CA-Bundle für wss://-Zertifikatsprüfung (esp_crt_bundle_attach)
 CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
 CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
