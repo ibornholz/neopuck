@@ -12,16 +12,21 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 
 static const char *TAG = "app";
 
+#define SLEEP_AFTER_MS  (120 * 1000)   // nach 2 Min Inaktivität -> Schlafmodus
+
 EventGroupHandle_t g_events;
 static volatile app_state_t s_state = ST_BOOT;
+static volatile int64_t s_last_active_ms;   // letzte Aktivität (für Auto-Schlaf)
 
 app_state_t app_get_state(void) { return s_state; }
 void app_set_state(app_state_t st)
 {
     s_state = st;
+    s_last_active_ms = esp_timer_get_time() / 1000;   // Zustandswechsel = Aktivität
     ui_show_state(st);
     ESP_LOGI(TAG, "state -> %d", st);
 }
@@ -54,8 +59,13 @@ static void cb_state_event(uint32_t bit) { xEventGroupSetBits(g_events, bit); }
 static void status_task(void *arg)
 {
     for (;;) {
-        ui_set_status(bsp_battery_percent(), agent_client_is_connected());
+        if (s_state != ST_SLEEP)
+            ui_set_status(bsp_battery_percent(), agent_client_is_connected());
         if (s_state == ST_LISTENING) ui_set_level(audio_input_level());
+        // Auto-Schlaf nach Inaktivität (nur aus dem Bereit-Zustand)
+        if (s_state == ST_IDLE &&
+            (esp_timer_get_time() / 1000 - s_last_active_ms) > SLEEP_AFTER_MS)
+            xEventGroupSetBits(g_events, EV_SLEEP);
         vTaskDelay(pdMS_TO_TICKS(200));
     }
 }

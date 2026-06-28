@@ -6,6 +6,15 @@
 #include "cJSON.h"
 #include "esp_log.h"
 
+// Optionale lokale Seed-Zugangsdaten (gitignored). Wenn vorhanden, werden sie
+// gesetzt, falls das NVS leer ist (z.B. nach einem Flash). Portal überschreibt.
+#if defined(__has_include)
+#  if __has_include("config_secrets.h")
+#    include "config_secrets.h"
+#    define HAVE_SEED 1
+#  endif
+#endif
+
 static const char *TAG = "cfg";
 static const char *NS  = "neopuck";
 
@@ -16,7 +25,7 @@ static void load_defaults(void)
     memset(&s_cfg, 0, sizeof(s_cfg));
     strcpy(s_cfg.device_name, "neopuck-01");
     s_cfg.proto        = PROTO_NEONET;
-    s_cfg.push_to_talk = true;
+    s_cfg.push_to_talk = false;   // Toggle: 1x tippen = Aufnahme an, nochmal = senden
     s_cfg.brightness   = 80;
     s_cfg.volume       = 70;
 }
@@ -47,6 +56,17 @@ void config_init(void)
         }
         nvs_close(h);
     }
+#ifdef HAVE_SEED
+    if (!config_is_provisioned()) {   // nur wenn NVS leer -> Re-Provisioning bleibt möglich
+        strcpy(s_cfg.wifi_ssid,   SEED_WIFI_SSID);
+        strcpy(s_cfg.wifi_pass,   SEED_WIFI_PASS);
+        strcpy(s_cfg.agent_url,   SEED_AGENT_URL);
+        strcpy(s_cfg.agent_token, SEED_AGENT_TOKEN);
+        persist();
+        ESP_LOGI(TAG, "NVS leer -> Seed-Creds aus config_secrets.h gesetzt");
+    }
+#endif
+
     ESP_LOGI(TAG, "config loaded: provisioned=%d url=%s",
              config_is_provisioned(), s_cfg.agent_url);
 }

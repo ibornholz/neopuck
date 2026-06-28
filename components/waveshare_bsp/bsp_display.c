@@ -113,7 +113,10 @@ lv_display_t *bsp_display_start(void)
     ESP_ERROR_CHECK(panel_init());
     ESP_ERROR_CHECK(touch_init());
 
-    const lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
+    // Default-Konfig ist stabil; höhere Priorität/Core-Pinning hungert die IDLE-Task
+    // aus (Task-Watchdog). Perf kommt aus dem leichteren Orb-Rendering.
+    lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
+    lvgl_cfg.task_stack = 6144;
     ESP_ERROR_CHECK(lvgl_port_init(&lvgl_cfg));
 
     const lvgl_port_display_cfg_t disp_cfg = {

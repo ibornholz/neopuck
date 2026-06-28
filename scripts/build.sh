@@ -8,13 +8,16 @@ if [ -z "${IDF_PATH:-}" ]; then
   exit 1
 fi
 
-idf.py set-target esp32s3
-idf.py build
+# Build-Verzeichnis AUSSERHALB des Projekts (Desktop ist oft iCloud-synchronisiert;
+# das dupliziert build/-Dateien während des Compiles -> "Directory not empty"-Abbruch).
+BUILD_DIR="${NEOPUCK_BUILD_DIR:-/tmp/neopuck-build}"
+
+idf.py -B "$BUILD_DIR" set-target esp32s3
+idf.py -B "$BUILD_DIR" build
 
 mkdir -p dist
 # erzeugt ein flashbares Gesamt-Image (bootloader + part-table + app)
-# Absoluter Pfad: idf.py merge-bin läuft im build/-Verzeichnis.
-idf.py merge-bin -o "$PWD/dist/neopuck-merged.bin"
+idf.py -B "$BUILD_DIR" merge-bin -o "$PWD/dist/neopuck-merged.bin"
 
 echo
 echo "OK -> dist/neopuck-merged.bin"

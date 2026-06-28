@@ -13,3 +13,6 @@ bridge/.env
 bridge/.venv/
 bridge/__pycache__/
 bridge/.openclaw_identity.json
+
+# lokale Seed-Creds (nie committen)
+main/config_secrets.h

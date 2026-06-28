@@ -28,31 +28,15 @@ static lv_obj_t *status_lbl, *hint_lbl;     // unter dem Orb
 static lv_obj_t *logo;
 static lv_obj_t *pair_box, *pair_lbl, *qr;  // Provisioning
 static lv_obj_t *miniapp_layer;             // Task 4
-static lv_anim_t breathe;
 
 static lv_color_t hex(uint32_t c) { return lv_color_hex(c); }
 
 // --- sanftes "Atmen" (Idle/Speaking): Glow-Opazität pulsiert ------------------
-static void breathe_cb(void *obj, int32_t v)
-{
-    lv_obj_set_style_bg_opa((lv_obj_t *)obj, v, 0);
-}
-static void start_breathe(void)
-{
-    lv_anim_init(&breathe);
-    lv_anim_set_var(&breathe, glow_a);
-    lv_anim_set_exec_cb(&breathe, breathe_cb);
-    lv_anim_set_values(&breathe, LV_OPA_20, LV_OPA_60);
-    lv_anim_set_duration(&breathe, 1500);
-    lv_anim_set_playback_duration(&breathe, 1500);
-    lv_anim_set_repeat_count(&breathe, LV_ANIM_REPEAT_INFINITE);
-    lv_anim_start(&breathe);
-}
-static void stop_breathe(void)
-{
-    lv_anim_delete(glow_a, breathe_cb);
-    lv_obj_set_style_bg_opa(glow_a, LV_OPA_40, 0);
-}
+// Orb wird statisch gezeichnet (nur bei Zustandswechsel). Eine Dauer-Animation
+// der überlappenden Halbtransparenz-Schichten überlastet das Software-Rendering
+// (Task-Watchdog / träge UI), daher bewusst KEIN per-Frame-"Atmen".
+static void start_breathe(void) { }
+static void stop_breathe(void)  { }
 
 // Orb + Ring + Status-Label einfärben.
 static void set_orb_color(uint32_t glow, uint32_t core_col)
@@ -65,9 +49,9 @@ static void set_orb_color(uint32_t glow, uint32_t core_col)
     lv_obj_set_style_text_color(status_lbl, hex(glow), 0);
 }
 
-// Orb-Touch = Push-to-Talk: HALTEN nimmt auf, LOSLASSEN sendet (-> THINKING).
-// Im SPEAKING-Zustand ist das erste Berühren "tap to dismiss" (Abbruch).
-static void orb_pressed(lv_event_t *e)
+// Orb-Touch = Klick zum Sprechen (Toggle): 1x tippen startet die Aufnahme,
+// nochmal tippen sendet (-> THINKING). Im SPEAKING-Zustand = "tap to dismiss".
+static void orb_clicked(lv_event_t *e)
 {
     (void)e;
     extern EventGroupHandle_t g_events;
@@ -75,14 +59,8 @@ static void orb_pressed(lv_event_t *e)
         audio_play_flush();
         app_set_state(ST_IDLE);
     } else {
-        xEventGroupSetBits(g_events, EV_TALK_PRESS);   // Aufnahme start
+        xEventGroupSetBits(g_events, EV_TALK_PRESS);   // Toggle an/aus (push_to_talk=false)
     }
-}
-static void orb_released(lv_event_t *e)
-{
-    (void)e;
-    extern EventGroupHandle_t g_events;
-    xEventGroupSetBits(g_events, EV_TALK_RELEASE);     // Aufnahme Ende -> THINKING
 }
 
 // einen runden, randlosen Vollkreis erzeugen
@@ -140,6 +118,9 @@ void ui_init(void)
     lv_obj_set_size(orb_layer, 320, 320);
     lv_obj_center(orb_layer);
     lv_obj_clear_flag(orb_layer, LV_OBJ_FLAG_SCROLLABLE);
+    // Großer, zuverlässiger Klick-Bereich für "Klick zum Sprechen".
+    lv_obj_add_flag(orb_layer, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(orb_layer, orb_clicked, LV_EVENT_CLICKED, NULL);
 
     // dünner Ring drumherum
     ring = lv_arc_create(orb_layer);
@@ -159,15 +140,9 @@ void ui_init(void)
     glow_a = circle(orb_layer, 240, UI_ACCENT, LV_OPA_40);
     glow_b = circle(orb_layer, 170, UI_ACCENT, LV_OPA_60);
     core   = circle(orb_layer, 96,  UI_ACCENT, LV_OPA_COVER);
-    lv_obj_set_style_shadow_color(core, hex(UI_ACCENT), 0);
-    lv_obj_set_style_shadow_width(core, 48, 0);
-    lv_obj_set_style_shadow_spread(core, 4, 0);
-    lv_obj_set_style_shadow_opa(core, LV_OPA_70, 0);
-    // Orb ist gedrückt-haltbar (Push-to-Talk) bzw. tap-to-dismiss im SPEAKING.
-    lv_obj_add_flag(core, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(core, orb_pressed,  LV_EVENT_PRESSED,    NULL);
-    lv_obj_add_event_cb(core, orb_released, LV_EVENT_RELEASED,   NULL);
-    lv_obj_add_event_cb(core, orb_released, LV_EVENT_PRESS_LOST, NULL);
+    // KEIN Blur-Schatten (im Software-Rendering teuer). Der Glow kommt aus den
+    // gestapelten Halbtransparenz-Kreisen.
+    lv_obj_clear_flag(core, LV_OBJ_FLAG_CLICKABLE);   // Klick geht an orb_layer
 
     // kleiner Punkt für THINKING (in den Kern gesetzt)
     think_dot = circle(orb_layer, 18, UI_TEXT, LV_OPA_COVER);
