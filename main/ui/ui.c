@@ -49,9 +49,9 @@ static void set_orb_color(uint32_t glow, uint32_t core_col)
     lv_obj_set_style_text_color(status_lbl, hex(glow), 0);
 }
 
-// Orb-Touch = Klick zum Sprechen (Toggle): 1x tippen startet die Aufnahme,
-// nochmal tippen sendet (-> THINKING). Im SPEAKING-Zustand = "tap to dismiss".
-static void orb_clicked(lv_event_t *e)
+// Orb-Touch = Halten zum Sprechen: HALTEN startet die Aufnahme, LOSLASSEN sendet.
+// Im SPEAKING-Zustand ist das Berühren "tap to dismiss" (Abbruch).
+static void orb_pressed(lv_event_t *e)
 {
     (void)e;
     extern EventGroupHandle_t g_events;
@@ -59,8 +59,14 @@ static void orb_clicked(lv_event_t *e)
         audio_play_flush();
         app_set_state(ST_IDLE);
     } else {
-        xEventGroupSetBits(g_events, EV_TALK_PRESS);   // Toggle an/aus (push_to_talk=false)
+        xEventGroupSetBits(g_events, EV_TALK_PRESS);   // Aufnahme start (halten)
     }
+}
+static void orb_released(lv_event_t *e)
+{
+    (void)e;
+    extern EventGroupHandle_t g_events;
+    xEventGroupSetBits(g_events, EV_TALK_RELEASE);     // loslassen -> senden
 }
 
 // einen runden, randlosen Vollkreis erzeugen
@@ -118,9 +124,11 @@ void ui_init(void)
     lv_obj_set_size(orb_layer, 320, 320);
     lv_obj_center(orb_layer);
     lv_obj_clear_flag(orb_layer, LV_OBJ_FLAG_SCROLLABLE);
-    // Großer, zuverlässiger Klick-Bereich für "Klick zum Sprechen".
+    // Großer, zuverlässiger Trefferbereich fürs Halten zum Sprechen.
     lv_obj_add_flag(orb_layer, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(orb_layer, orb_clicked, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(orb_layer, orb_pressed,  LV_EVENT_PRESSED,    NULL);
+    lv_obj_add_event_cb(orb_layer, orb_released, LV_EVENT_RELEASED,   NULL);
+    lv_obj_add_event_cb(orb_layer, orb_released, LV_EVENT_PRESS_LOST, NULL);
 
     // dünner Ring drumherum
     ring = lv_arc_create(orb_layer);
@@ -238,9 +246,8 @@ void ui_show_state(app_state_t st)
     case ST_CONNECTING:
         set_orb_color(UI_IDLE, UI_IDLE);
         lv_label_set_text(status_lbl, "VERBINDE");
-        lv_label_set_text(hint_lbl, "");
+        lv_label_set_text(hint_lbl, "einen Moment");
         lv_label_set_text(transcript, "");
-        start_breathe();
         break;
 
     case ST_IDLE:
@@ -258,12 +265,10 @@ void ui_show_state(app_state_t st)
         break;
 
     case ST_THINKING:
-        set_orb_color(UI_THINK, UI_THINK);
+        set_orb_color(UI_THINK, UI_THINK);                  // statischer amber Orb
         lv_obj_clear_flag(think_dot, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_set_size(core, 70, 70);
         lv_label_set_text(status_lbl, "DENKE");
         lv_label_set_text(hint_lbl, "");
-        start_breathe();
         break;
 
     case ST_SPEAKING:

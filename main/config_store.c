@@ -25,7 +25,7 @@ static void load_defaults(void)
     memset(&s_cfg, 0, sizeof(s_cfg));
     strcpy(s_cfg.device_name, "neopuck-01");
     s_cfg.proto        = PROTO_NEONET;
-    s_cfg.push_to_talk = false;   // Toggle: 1x tippen = Aufnahme an, nochmal = senden
+    s_cfg.push_to_talk = true;    // Halten zum Sprechen: halten = Aufnahme, loslassen = senden
     s_cfg.brightness   = 80;
     s_cfg.volume       = 70;
 }
